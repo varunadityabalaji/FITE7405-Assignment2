@@ -3,6 +3,13 @@ from scipy.stats import norm
 import pandas as pd
 import numpy as np
 
+
+Q=0.2
+R=0.04
+T0=0
+T=(24-16)/365
+
+
 class BlackScholesModel:
     def calculate_option_price(self, S, K, T, t, sigma, r, q, option_type):
         N = norm.cdf
@@ -67,49 +74,86 @@ class ArbitrageOpportunities:
         latest_prices[strike][option_type + 'AskPrice'] = ask
         return latest_prices
 
-    def put_call_arbitrage(self, option_price, etf_bid_price, etf_ask_price, arbitrage_df, time):
+    def put_call_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price, arbitrage_df, time):
+        
+        #Call is overvalued
         C = option_price.get('CBidPrice')
         P = option_price.get('PAskPrice')
-        S = etf_bid_price
-        K = option_price['Strike']
-        if pd.isna(C) or pd.isna(P) or pd.isna(S):
+        S = etf_ask_price
+        K = strike
+
+        if any(pd.isna(x) for x in [C, P, S]):
             return arbitrage_df
 
         put_call_parity = self.bs.check_put_call_parity(S, K, T, T0, R, Q, C, P)
         if put_call_parity != 0:
-            if put_call_parity < 0:
-                if put_call_parity * 10000 < -self.transaction_cost:
-                    arbitrage_df.loc[len(arbitrage_df)] = [C, P, K, S, time, 'Put-Call Parity Short sell put, Short-sell underlying, Buy Call, Buy Risk Free Bond', "With Transaction Fee", -put_call_parity * 10000 - self.transaction_cost]
-                arbitrage_df.loc[len(arbitrage_df)] = [C, P, K, S, time, 'Put-Call Parity Short sell put, Short-sell underlying, Buy Call, Buy Risk Free Bond', "Without Transaction Fee", -put_call_parity * 10000]
-            elif put_call_parity > 0:
+            if put_call_parity > 0:
                 if put_call_parity * 10000 > self.transaction_cost:
-                    arbitrage_df.loc[len(arbitrage_df)] = [C, P, K, S, time, 'Put-Call Parity Short sell call, Short-sell bond, Buy Put, Buy Underlying', "With Transaction Fee", put_call_parity * 10000 - self.transaction_cost]
-                arbitrage_df.loc[len(arbitrage_df)] = [C, P, K, S, time, 'Put-Call Parity Short sell call, Short-sell bond, Buy Put, Buy Underlying',"Without Transaction Fee", put_call_parity * 10000]
+                    arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Call Buy Put', "With Transaction Fee", put_call_parity * 10000 - self.transaction_cost]
+                arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Call Buy Put', "Without Transaction Fee", put_call_parity * 10000]
+            
+
+        #Put is overvalued
+        C = option_price.get('CAskPrice')
+        P = option_price.get('PBidPrice')
+        S = etf_bid_price
+        K = strike
+
+        put_call_parity = self.bs.check_put_call_parity(S, K, T, T0, R, Q, C, P)
+        if put_call_parity < 0:
+            if put_call_parity * 10000 < -1*self.transaction_cost:
+                arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put-Call Parity Short sell call, Short-sell bond, Buy Put, Buy Underlying', "With Transaction Fee", put_call_parity*-10000 - self.transaction_cost]
+            arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put-Call Parity Short sell call, Short-sell bond, Buy Put, Buy Underlying',"Without Transaction Fee", put_call_parity * -10000]
+        
         return arbitrage_df
 
-    def call_option_bound_arbitrage(self, option_price, etf_bid_price, arbitrage_df, time):
-        C = option_price.get('CAskPrice')
+    def call_option_bound_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price,arbitrage_df, time):
+        C = option_price.get('CAskPrice') 
         S = etf_bid_price
-        K = option_price['Strike']
-        if pd.isna(C) or pd.isna(S):
+        K = strike
+
+        if any(pd.isna(x) for x in [C, S]):
             return arbitrage_df
 
-        portfolio_value = S * exp(-Q * T) - K * exp(-R * T) - C
-        if portfolio_value > 0 and portfolio_value * 10000 > self.transaction_cost:
-            arbitrage_df.loc[len(arbitrage_df)] = [C, np.nan, K, S, time, 'Call Bound', 1, portfolio_value * 10000 - self.transaction_cost]
+        lower_bound = np.max(S * exp(-Q * T) - K * exp(-R * T) - C, 0)
+        if lower_bound>C:
+            if (lower_bound-C) * 10000 > self.transaction_cost:
+                arbitrage_df.loc[len(arbitrage_df)] = [S, C, np.nan, K, time, 'Lower Call Bound', "With Fees", (lower_bound-C) * 10000 - self.transaction_cost]
+
+        C = option_price.get('CBidPrice')
+        S = etf_ask_price
+        K = strike
+
+        upper_bound = S * exp(-Q * T)
+        if C > upper_bound:
+            arbitrage_df.loc[len(arbitrage_df)] = [S, C, np.nan, K, time, 'Upper Call Bound', "Without Fees", (C - upper_bound) * 10000]
+
         return arbitrage_df
 
-    def put_option_bound_arbitrage(self, option_price, etf_ask_price, arbitrage_df, time):
+    def put_option_bound_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price, arbitrage_df, time):
         P = option_price.get('PAskPrice')
-        S = etf_ask_price
-        K = option_price['Strike']
+        S = etf_bid_price
+        K = strike
         if pd.isna(P) or pd.isna(S):
             return arbitrage_df
+        
+        lower_bound = np.max(K * exp(-R * T) - S * exp(-Q * T), 0)
 
-        portfolio_value = K * exp(-R * T) - S * exp(-Q * T) - P
-        if portfolio_value > 0 and portfolio_value * 10000 > self.transaction_cost:
-            arbitrage_df.loc[len(arbitrage_df)] = [np.nan, P, K, S, time, 'Put Bound', 1, portfolio_value * 10000 - self.transaction_cost]
+        if lower_bound > P:
+            if (lower_bound - P) * 10000 > self.transaction_cost:
+                arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Lower Put Bound', "With Fees", (lower_bound - P) * 10000 - self.transaction_cost]
+                arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Lower Put Bound', "With Fees", (lower_bound - P) * 10000]
+        
+        
+        P = option_price.get('PBidPrice')
+        S = etf_ask_price
+        K = strike
+
+        upper_bound = K * exp(-R * T)
+        if P > upper_bound:
+            arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Upper Put Bound', "Without Fees", (P - upper_bound) * 10000]
         return arbitrage_df
+
 
     def vertical_spread_arbitrage(self, strike, latest_prices, arbitrage_df, time):
         for K1, prices in latest_prices.items():
@@ -123,23 +167,6 @@ class ArbitrageOpportunities:
             portfolio_value = C2 - C1
             if portfolio_value > 0 and portfolio_value * 10000 > self.transaction_cost:
                 arbitrage_df.loc[len(arbitrage_df)] = [(C1, C2), np.nan, (K1, strike), np.nan, time, 'Vertical Spread', 1, portfolio_value * 10000 - self.transaction_cost]
-        return arbitrage_df
-
-    def non_negative_butterfly_spread_arbitrage(self, strike, latest_prices, arbitrage_df, time):
-        K1 = strike
-        C1 = latest_prices[strike].get('CAskPrice')
-        for K2, prices2 in latest_prices.items():
-            if K2 <= K1:
-                continue
-            C2 = prices2.get('CBidPrice')
-            for K3, prices3 in latest_prices.items():
-                if K3 <= K2:
-                    continue
-                C3 = prices3.get('CAskPrice')
-                a_b = (K3 - K2) / (K3 - K1)
-                portfolio_value = C2 - a_b * C1 - (1 - a_b) * C3
-                if portfolio_value > 0 and portfolio_value * 10000 > self.transaction_cost:
-                    arbitrage_df.loc[len(arbitrage_df)] = [(C1, C2, C3), np.nan, (K1, K2, K3), np.nan, time, 'Non Negative Butterfly', 1, portfolio_value * 10000 - self.transaction_cost]
         return arbitrage_df
 
 def main():
@@ -157,14 +184,11 @@ def main():
 
     for _, data in marketdata.iterrows():
         if data['Type'] == 'Option':
+            
             latest_prices = arbitrage.hold_latest_instrument_data(latest_prices, data)
-
-            arbitrage_df = arbitrage.put_call_arbitrage(latest_prices[data['Strike']], etf_bid_price, etf_ask_price, arbitrage_df, data['LocalTime'])
-            arbitrage_df = arbitrage.call_option_bound_arbitrage(latest_prices[data['Strike']], etf_bid_price, arbitrage_df, data['LocalTime'])
-            arbitrage_df = arbitrage.put_option_bound_arbitrage(latest_prices[data['Strike']], etf_ask_price, arbitrage_df, data['LocalTime'])
-            if data['OptionType'] == 'C':
-                arbitrage_df = arbitrage.vertical_spread_arbitrage(data['Strike'], latest_prices, arbitrage_df, data['LocalTime'])
-                arbitrage_df = arbitrage.non_negative_butterfly_spread_arbitrage(data['Strike'], latest_prices, arbitrage_df, data['LocalTime'])
+            arbitrage_df = arbitrage.put_call_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_bid_price, etf_ask_price, arbitrage_df, data['LocalTime'])
+            arbitrage_df = arbitrage.call_option_bound_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_bid_price, etf_ask_price, arbitrage_df, data['LocalTime'])
+            arbitrage_df = arbitrage.put_option_bound_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_ask_price, etf_ask_price, arbitrage_df, data['LocalTime'])
         else:
             etf_bid_price = data['Bid1']
             etf_ask_price = data['Ask1']
