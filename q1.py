@@ -11,7 +11,7 @@ class CallOptionValuation(object):
 
     #used to calcuate d1 
     def calculate_d1(self):
-        d1 = (np.log(self.stock_price / self.strike) + (self.rate + 0.5 * self.volatility ** 2) * self.expiry) / (self.volatility * np.sqrt(self.expiry))
+        d1 = ((np.log(self.stock_price / self.strike) + self.rate*self.expiry) / (self.volatility * np.sqrt(self.expiry)))+(0.5*self.volatility*np.sqrt(self.expiry))
         return d1
 
     #used to calculate d2
@@ -35,12 +35,12 @@ class PutOptionValuation(object):
         self.expiry = expiry
         self.volatility = volatility
 
-    # used to calculate d1
+    #used to calcuate d1 
     def calculate_d1(self):
-        d1 = (np.log(self.stock_price / self.strike) + (self.rate + 0.5 * self.volatility ** 2) * self.expiry) / (self.volatility * np.sqrt(self.expiry))
+        d1 = ((np.log(self.stock_price / self.strike) + self.rate*self.expiry) / (self.volatility * np.sqrt(self.expiry)))+(0.5*self.volatility*np.sqrt(self.expiry))
         return d1
 
-    # used to calculate d2
+    #used to calculate d2
     def calculate_d2(self):
         d2 = self.calculate_d1() - self.volatility * np.sqrt(self.expiry)
         return d2

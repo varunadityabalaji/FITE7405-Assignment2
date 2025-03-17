@@ -32,11 +32,11 @@ class BlackScholesModel:
         d1 = self.calculate_d1(S, K, T, t, sigma, r, q)
         d2 = self.calculate_d2(d1, sigma, T, t)
         if option_type == "call":
-            C = S * exp(-q * (T - t)) * N(d1) - K * exp(-r * (T - t)) * N(d2)
+            C = S * exp(-q * (T - t)) * norm.cdf(d1) - K * exp(-r * (T - t)) * norm.cdf(d2)
             return C
         
         if option_type == "put":
-            P = K * exp(-r * (T - t)) * N(-d2) - S * exp(-q * (T - t)) * N(-d1)
+            P = K * exp(-r * (T - t)) * norm.cdf(-d2) - S * exp(-q * (T - t)) * norm.cdf(-d1)
             return P
 
     def calculate_d1(self, S, K, T, t, sigma, r, q):
@@ -49,17 +49,17 @@ class BlackScholesModel:
 
     def calculate_vega(self, S, K, T, t, r, sigma, q):
         d1 = self.calculate_d1(S, K, T, t, sigma, r, q)
-        vega = S * exp(-q * (T - t)) * sqrt(T - t) * exp(-0.5 * d1 * sigma ** 2) / sqrt(2 * pi)
+        vega = S * exp(-q * (T - t)) * norm.pdf(d1) * sqrt(T - t)
         return vega
 
     def verify_bounds(self, S, K, T, t, r, q, price, option_type):
         if option_type == 'call':
-            if price >= S * exp(-q * T) - K * exp(-r * T) and price < S * exp(-q * T):
+            if price > S * exp(-q * T) - K * exp(-r * T) and price < S * exp(-q * T):
                 return True
             else:
                 return False
         if option_type == 'put':
-            if price >= K * exp(-r * T) - S * exp(-q * T) and price < K * exp(-r * T):
+            if price > K * exp(-r * T) - S * exp(-q * T) and price < K * exp(-r * T):
                 return True
             else:
                 return False

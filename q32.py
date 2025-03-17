@@ -56,17 +56,17 @@ class BlackScholesModel:
 
     def calculate_vega(self, S, K, T, t, r, sigma, q):
         d1 = self.calculate_d1(S, K, T, t, sigma, r, q)
-        vega = S * exp(-q * (T - t)) * sqrt(T - t) * exp(-0.5 * d1 * sigma ** 2) / sqrt(2 * pi)
+        vega = S * exp(-q * (T - t)) * norm.pdf(d1) * sqrt(T - t)
         return vega
 
     def verify_bounds(self, S, K, T, t, r, q, price, option_type):
         if option_type == 'call':
-            if price >= S * exp(-q * T) - K * exp(-r * T) and price <= S * exp(-q * T):
+            if price > S * exp(-q * T) - K * exp(-r * T) and price < S * exp(-q * T):
                 return True
             else:
                 return False
         if option_type == 'put':
-            if price >= K * exp(-r * T) - S * exp(-q * T) and price <= K * exp(-r * T):
+            if price > K * exp(-r * T) - S * exp(-q * T) and price < K * exp(-r * T):
                 return True
             else:
                 return False
@@ -81,7 +81,7 @@ def calculate_implied_volatility_for_data(data, r, q, T, t, end_time):
     
     strikes = data[(data['Symbol'] != 510050) & (data['LocalTime'] <= end_time)]['Strike'].dropna().unique()
     implied_vol_df = pd.DataFrame(index=strikes, columns=['BidVolP', 'AskVolP', 'BidVolC', 'AskVolC'])
-    implied_vol_df.index.name = 'Strike'
+    
     
     #loop through all the options and calculate the implied volatility
     for symbol in data['Symbol'].unique()[:-1]:
@@ -109,15 +109,15 @@ def calculate_implied_volatility_for_data(data, r, q, T, t, end_time):
 def plot_implied_volatility(df, time):
     fig, axs = plt.subplots(2, 2)
     fig.suptitle(time)
-    axs[0, 0].plot(df.index, df.BidVolP)
-    axs[0, 0].set_title("BidVolP")
-    axs[1, 0].plot(df.index, df.BidVolC, 'tab:orange')
-    axs[1, 0].set_title("BidVolC")
+    axs[0, 0].plot(df.index, df.BidVolC, 'tab:brown')
+    axs[0, 0].set_title("Implied Volatility for Bid Call")
+    axs[1, 0].plot(df.index, df.BidVolP)
+    axs[1, 0].set_title("Implied Volatility for Bid Put")
     axs[1, 0].sharex(axs[0, 0])
-    axs[0, 1].plot(df.index, df.AskVolP, 'tab:green')
-    axs[0, 1].set_title("AskVolP")
-    axs[1, 1].plot(df.index, df.AskVolC, 'tab:red')
-    axs[1, 1].set_title("AskVolC")
+    axs[0, 1].plot(df.index, df.AskVolC, 'tab:orange')
+    axs[0, 1].set_title("Implied Volatility for Ask Call")
+    axs[1, 1].plot(df.index, df.AskVolP, 'tab:green')
+    axs[1, 1].set_title("Implied Volatility for Ask Put")
     axs[1, 1].sharex(axs[0, 1])
     fig.tight_layout()
     plt.show()
