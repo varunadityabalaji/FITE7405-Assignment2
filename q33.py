@@ -74,7 +74,7 @@ class ArbitrageOpportunities:
         latest_prices[strike][option_type + 'AskPrice'] = ask
         return latest_prices
 
-    def put_call_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price, arbitrage_df, time):
+    def put_call_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price, arbitrage_df,arbitrage_df_with_txnfees, time):
         """
         Analyzes put-call parity arbitrage opportunities and updates the provided DataFrame with the results.
         Parameters:
@@ -94,14 +94,14 @@ class ArbitrageOpportunities:
         K = strike
         
         if pd.isna(C) or pd.isna(P) or pd.isna(S):
-            return arbitrage_df
+            return arbitrage_df,arbitrage_df_with_txnfees
         
         put_call_parity = self.bs.check_put_call_parity(S, K, T, T0, R, Q, C, P)
         if put_call_parity != 0:
             if put_call_parity > 0:
                 if put_call_parity * 10000 > self.transaction_cost:
-                    arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Call Buy Put', "With Transaction Fee", put_call_parity * 10000 - self.transaction_cost]
-                arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Call Buy Put', "Without Transaction Fee", put_call_parity * 10000]
+                    arbitrage_df_with_txnfees.loc[len(arbitrage_df_with_txnfees)] = [S, C, P, K, time, 'Put Call Parity, Sell Call and Buy Put and Buy the Stock and Sell Risk Free Bond', put_call_parity * 10000 - self.transaction_cost]
+                arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Call and Buy Put and Buy the Stock and Sell Risk Free Bond', put_call_parity * 10000]
             
 
         C = option_price.get('CAskPrice')
@@ -110,17 +110,17 @@ class ArbitrageOpportunities:
         K = strike
 
         if pd.isna(C) or pd.isna(P) or pd.isna(S):
-            return arbitrage_df
+            return arbitrage_df,arbitrage_df_with_txnfees
 
         put_call_parity = self.bs.check_put_call_parity(S, K, T, T0, R, Q, C, P)
         if put_call_parity < 0:
             if put_call_parity * 10000 < -1*self.transaction_cost:
-                arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Put Buy Call', "With Transaction Fee", put_call_parity*-10000 - self.transaction_cost]
-            arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Put Buy Call',"Without Transaction Fee", put_call_parity * -10000]
+                arbitrage_df_with_txnfees.loc[len(arbitrage_df_with_txnfees)] = [S, C, P, K, time, 'Put Call Parity, Sell Put and Buy Call and sell Stock and Buy Risk Free Bond', put_call_parity*-10000 - self.transaction_cost]
+            arbitrage_df.loc[len(arbitrage_df)] = [S, C, P, K, time, 'Put Call Parity, Sell Put and Buy Call and sell Stock and Buy Risk Free Bond', put_call_parity * -10000]
         
-        return arbitrage_df
+        return arbitrage_df,arbitrage_df_with_txnfees
 
-    def call_option_bound_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price,arbitrage_df, time):
+    def call_option_bound_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price,arbitrage_df,arbitrage_df_with_txnfees ,time):
         def call_option_bound_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price, arbitrage_df, time):
             """
             Evaluates arbitrage opportunities for call options based on their lower and upper bounds.
@@ -148,27 +148,29 @@ class ArbitrageOpportunities:
         K = strike
 
         if pd.isna(C) or  pd.isna(S):
-            return arbitrage_df
+            return arbitrage_df,arbitrage_df_with_txnfees
 
         lower_bound = np.max(S * exp(-Q * T) - K * exp(-R * T), 0)
         if lower_bound>C:
             if (lower_bound-C) * 10000 > self.transaction_cost:
-                arbitrage_df.loc[len(arbitrage_df)] = [S, C, np.nan, K, time, 'Lower Call Bound, Long risk free Bond and short Stock and Buy Call', "With Fees", (lower_bound-C) * 10000 - self.transaction_cost]
+                arbitrage_df_with_txnfees.loc[len(arbitrage_df_with_txnfees)] = [S, C, np.nan, K, time, 'Lower Call Bound, Long risk free Bond and short Stock and Buy Call', (lower_bound-C) * 10000 - self.transaction_cost]
+            arbitrage_df.loc[len(arbitrage_df)] = [S, C, np.nan, K, time, 'Lower Call Bound, Long risk free Bond and short Stock and Buy Call', (lower_bound-C) * 10000]
 
         C = option_price.get('CBidPrice')
         S = etf_ask_price
         K = strike
 
         if pd.isna(C) or pd.isna(S):
-            return arbitrage_df
+            return arbitrage_df,arbitrage_df_with_txnfees
 
         upper_bound = S * exp(-Q * T)
         if C > upper_bound:
-            arbitrage_df.loc[len(arbitrage_df)] = [S, C, np.nan, K, time, 'Upper Call Bound, short the call and Long the stock and short risk free bond', "Without Fees", (C - upper_bound) * 10000]
+            arbitrage_df.loc[len(arbitrage_df)] = [S, C, np.nan, K, time, 'Upper Call Bound, short the call and Long the stock and short risk free bond', (C - upper_bound) * 10000]
+            arbitrage_df_with_txnfees.loc[len(arbitrage_df_with_txnfees)] = [S, C, np.nan, K, time, 'Upper Call Bound, short the call and Long the stock and short risk free bond', (C - upper_bound) * 10000]
 
-        return arbitrage_df
+        return arbitrage_df,arbitrage_df_with_txnfees
 
-    def put_option_bound_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price, arbitrage_df, time):
+    def put_option_bound_arbitrage(self, strike, option_price, etf_bid_price, etf_ask_price, arbitrage_df,arbitrage_df_with_txnfees, time):
         """
         Evaluates arbitrage opportunities for put options based on their lower and upper bounds.
 
@@ -195,14 +197,14 @@ class ArbitrageOpportunities:
         K = strike
 
         if pd.isna(P) or pd.isna(S):
-            return arbitrage_df
+            return arbitrage_df,arbitrage_df_with_txnfees
         
         lower_bound = np.max(K * exp(-R * T) - S * exp(-Q * T), 0)
 
         if lower_bound > P:
             if (lower_bound - P) * 10000 > self.transaction_cost:
-                arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Lower Put Bound, long the stock and put option and short the risk free bond', "With Fees", (lower_bound - P) * 10000 - self.transaction_cost]
-                arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Lower Put Bound', "With Fees", (lower_bound - P) * 10000]
+                arbitrage_df_with_txnfees.loc[len(arbitrage_df_with_txnfees)] = [S, np.nan, P, K, time, 'Lower Put Bound, long the stock and put option and short the risk free bond', (lower_bound - P) * 10000 - self.transaction_cost]
+            arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Lower Put Bound', (lower_bound - P) * 10000]
         
         
         P = option_price.get('PBidPrice')
@@ -210,12 +212,13 @@ class ArbitrageOpportunities:
         K = strike
 
         if pd.isna(P) or pd.isna(S):
-            return arbitrage_df
+            return arbitrage_df,arbitrage_df_with_txnfees
 
         upper_bound = K * exp(-R * T)
         if P > upper_bound:
-            arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Upper Put Bound, Short put and long risk free bond', "Without Fees", (P - upper_bound) * 10000]
-        return arbitrage_df
+            arbitrage_df.loc[len(arbitrage_df)] = [S, np.nan, P, K, time, 'Upper Put Bound, Short put and long risk free bond', (P - upper_bound) * 10000]
+            arbitrage_df_with_txnfees.loc[len(arbitrage_df_with_txnfees)] = [S, np.nan, P, K, time, 'Upper Put Bound, Short put and long risk free bond', (P - upper_bound) * 10000]
+        return arbitrage_df,arbitrage_df_with_txnfees
 
 def main():
     instruments = pd.read_csv('instruments.csv')
@@ -225,8 +228,8 @@ def main():
     etf_bid_price = np.nan
     etf_ask_price = np.nan
     latest_prices = {}
-    arbitrage_df = pd.DataFrame(columns=['ETFPrice', 'CallPrice', 'PutPrice', 'StrikePrice', 'LocalTime', 'Type and Action', 'Transaction Type', 'Profit'])
-
+    arbitrage_df = pd.DataFrame(columns=['ETFPrice', 'CallPrice', 'PutPrice', 'StrikePrice', 'LocalTime', 'Type and Action', 'Profit'])
+    arbitrage_df_with_txnfees = pd.DataFrame(columns=['ETFPrice', 'CallPrice', 'PutPrice', 'StrikePrice', 'LocalTime', 'Type and Action', 'Profit'])
     bs = BlackScholesModel()
     arbitrage = ArbitrageOpportunities(bs)
 
@@ -234,14 +237,38 @@ def main():
         if data['Type'] == 'Option':
             
             latest_prices = arbitrage.hold_latest_instrument_data(latest_prices, data)
-            arbitrage_df = arbitrage.put_call_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_bid_price, etf_ask_price, arbitrage_df, data['LocalTime'])
-            arbitrage_df = arbitrage.call_option_bound_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_bid_price, etf_ask_price, arbitrage_df, data['LocalTime'])
-            arbitrage_df = arbitrage.put_option_bound_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_ask_price, etf_ask_price, arbitrage_df, data['LocalTime'])
+            arbitrage_df,arbitrage_df_with_txnfees = arbitrage.put_call_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_bid_price, etf_ask_price, arbitrage_df, arbitrage_df_with_txnfees, data['LocalTime'])
+            arbitrage_df,arbitrage_df_with_txnfees = arbitrage.call_option_bound_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_bid_price, etf_ask_price, arbitrage_df,arbitrage_df_with_txnfees ,data['LocalTime'])
+            arbitrage_df,arbitrage_df_with_txnfees = arbitrage.put_option_bound_arbitrage(data['Strike'],latest_prices[data['Strike']], etf_ask_price, etf_ask_price, arbitrage_df,arbitrage_df_with_txnfees ,data['LocalTime'])
         else:
             etf_bid_price = data['Bid1']
             etf_ask_price = data['Ask1']
 
-    arbitrage_df.to_csv('arbitrage_opportunities.csv')
+    arbitrage_df.to_csv('arbitrage_opportunities_without_fees.csv')
+    arbitrage_df_with_txnfees.to_csv('arbitrage_opportunities_with_transaction_fees.csv')
+
+    # Calculate total profit and count of each type of arbitrage
+    total_profit = arbitrage_df['Profit'].sum()
+    total_profit_with_txnfees = arbitrage_df_with_txnfees['Profit'].sum()
+    total_entries = len(arbitrage_df)
+    total_entries_with_txnfees = len(arbitrage_df_with_txnfees)
+
+
+    print("Total number of entries (without transaction fees):", total_entries)
+    print("Total number of entries (with transaction fees):", total_entries_with_txnfees)
+  
+
+    print("Total Profit (without transaction fees):", total_profit)
+    print("Total Profit (with transaction fees):", total_profit_with_txnfees)
+   
+    # Calculate and print the categorical spread for each category in the 'Type and Action' column for each file
+    arbitrage_count = arbitrage_df.groupby('Type and Action').size()
+    arbitrage_count_with_txnfees = arbitrage_df_with_txnfees.groupby('Type and Action').size()
+
+    print("\nCategorical Spread (without transaction fees):")
+    print(arbitrage_count)
+    print("\nCategorical Spread (with transaction fees):")
+    print(arbitrage_count_with_txnfees)
 
 if __name__ == "__main__":
     main()
